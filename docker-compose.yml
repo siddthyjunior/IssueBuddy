@@ -1,0 +1,76 @@
+name: issuebuddy
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: issuebuddy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-issuebuddy}
+      POSTGRES_USER: ${POSTGRES_USER:-issuebuddy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-issuebuddy_dev_password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-issuebuddy} -d ${POSTGRES_DB:-issuebuddy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: issuebuddy-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-issuebuddy}:${POSTGRES_PASSWORD:-issuebuddy_dev_password}@postgres:5432/${POSTGRES_DB:-issuebuddy}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-this-secret-to-a-random-value-32-chars-minimum}
+      CORS_ORIGINS: http://localhost:5173
+      UPLOAD_DIR: /app/uploads
+      ADMIN_NAME: ${ADMIN_NAME:-IssueBuddy Admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@issuebuddy.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./backend:/app:Z
+      - backend_node_modules:/app/node_modules
+      - uploads_data:/app/uploads
+    command: sh -c "npx prisma migrate deploy && npm run db:seed && npm run dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: issuebuddy-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8080
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app:Z
+      - frontend_node_modules:/app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  backend_node_modules:
+  frontend_node_modules:
+  uploads_data:

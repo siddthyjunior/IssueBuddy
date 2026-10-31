@@ -1,0 +1,52 @@
+name: IssueBuddy Phase 2 CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate Prisma schema
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/issuebuddy
+        run: npx prisma validate
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/issuebuddy
+        run: npx prisma generate
+      - name: Run backend tests
+        run: npm test
+
+  frontend:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        run: npm run build

@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "IssueBuddy API",
+    "description": "CRUD API checks for the IssueBuddy Phase 1 project.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "ticketId",
+      "value": "replace-with-ticket-id"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "List tickets",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/tickets?page=1&pageSize=20"
+      }
+    },
+    {
+      "name": "Search and filter tickets",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/tickets?status=open,in_progress&priority=high,urgent&q=api&page=1&pageSize=10"
+      }
+    },
+    {
+      "name": "Get ticket by ID",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/tickets/{{ticketId}}"
+      }
+    },
+    {
+      "name": "Create ticket",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Created with HTTP 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "if (body.id) pm.collectionVariables.set('ticketId', body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Login button not working\",\n  \"description\": \"Clicking the login button does nothing on Chrome.\",\n  \"status\": \"open\",\n  \"priority\": \"high\",\n  \"assignee\": \"Alice\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/tickets"
+      }
+    },
+    {
+      "name": "Update ticket (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Login button fixed\",\n  \"description\": \"The login button is now working on Chrome.\",\n  \"status\": \"review\",\n  \"priority\": \"medium\",\n  \"assignee\": \"Alice\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/tickets/{{ticketId}}"
+      }
+    },
+    {
+      "name": "Change status (PATCH)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"closed\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/tickets/{{ticketId}}"
+      }
+    },
+    {
+      "name": "Delete ticket",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/tickets/{{ticketId}}"
+      }
+    }
+  ]
+}

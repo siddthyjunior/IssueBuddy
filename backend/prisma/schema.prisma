@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  DEVELOPER
+  VIEWER
+}
+
+enum ProjectRole {
+  MANAGER
+  DEVELOPER
+  VIEWER
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  REVIEW
+  CLOSED
+}
+
+enum IssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  ISSUE_ASSIGNED
+  COMMENT_ADDED
+  ISSUE_UPDATED
+}
+
+model User {
+  id                 String          @id @default(uuid()) @db.Uuid
+  name               String          @db.VarChar(100)
+  email              String          @unique @db.VarChar(255)
+  passwordHash       String          @map("password_hash")
+  role               UserRole        @default(DEVELOPER)
+  isActive           Boolean         @default(true) @map("is_active")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  ownedProjects      Project[]       @relation("ProjectOwner")
+  memberships        ProjectMember[]
+  assignedIssues     Issue[]         @relation("IssueAssignee")
+  reportedIssues     Issue[]         @relation("IssueReporter")
+  comments           Comment[]
+  activityLogs       ActivityLog[]
+  uploadedAttachments Attachment[]
+  notifications      Notification[]  @relation("NotificationRecipient")
+  actedNotifications Notification[]  @relation("NotificationActor")
+
+  @@map("users")
+}
+
+model Project {
+  id               String          @id @default(uuid()) @db.Uuid
+  name             String          @db.VarChar(120)
+  key              String          @unique @db.VarChar(12)
+  description      String          @default("")
+  nextIssueNumber  Int             @default(1) @map("next_issue_number")
+  ownerId          String          @map("owner_id") @db.Uuid
+  owner            User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members          ProjectMember[]
+  issues           Issue[]
+  labels           Label[]
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String      @id @default(uuid()) @db.Uuid
+  projectId String      @map("project_id") @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  role      ProjectRole @default(DEVELOPER)
+  addedAt   DateTime    @default(now()) @map("added_at")
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Issue {
+  id          String        @id @default(uuid()) @db.Uuid
+  issueKey    String        @unique @map("issue_key") @db.VarChar(30)
+  title       String        @db.VarChar(160)
+  description String        @default("")
+  status      IssueStatus   @default(OPEN)
+  priority    IssuePriority @default(MEDIUM)
+  projectId   String        @map("project_id") @db.Uuid
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assigneeId  String?       @map("assignee_id") @db.Uuid
+  assignee    User?         @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporterId  String        @map("reporter_id") @db.Uuid
+  reporter    User          @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  comments    Comment[]
+  activities  ActivityLog[]
+  labels      IssueLabel[]
+  attachments Attachment[]
+  notifications Notification[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([projectId, priority])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@map("issues")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  body      String   @db.VarChar(5000)
+  issueId   String   @map("issue_id") @db.Uuid
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([issueId, createdAt])
+  @@map("comments")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  action    String   @db.VarChar(80)
+  details   Json
+  issueId   String   @map("issue_id") @db.Uuid
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actorId   String?  @map("actor_id") @db.Uuid
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([issueId, createdAt])
+  @@map("activity_logs")
+}
+
+model Label {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @db.VarChar(40)
+  color     String       @default("#8b6df0") @db.VarChar(7)
+  projectId String       @map("project_id") @db.Uuid
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues    IssueLabel[]
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@unique([projectId, name])
+  @@map("labels")
+}
+
+model IssueLabel {
+  issueId String @map("issue_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@map("issue_labels")
+}
+
+model Attachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  originalName String   @map("original_name") @db.VarChar(255)
+  storageName  String   @unique @map("storage_name") @db.VarChar(255)
+  mimeType     String   @map("mime_type") @db.VarChar(120)
+  size         Int
+  issueId      String   @map("issue_id") @db.Uuid
+  issue        Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploadedById String   @map("uploaded_by_id") @db.Uuid
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([issueId])
+  @@map("attachments")
+}
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  type        NotificationType
+  message     String           @db.VarChar(500)
+  recipientId String           @map("recipient_id") @db.Uuid
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?          @map("actor_id") @db.Uuid
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  issueId     String?          @map("issue_id") @db.Uuid
+  issue       Issue?           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  readAt      DateTime?        @map("read_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([recipientId, readAt, createdAt])
+  @@map("notifications")
+}
